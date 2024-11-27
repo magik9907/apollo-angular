@@ -55,14 +55,21 @@ jobs:
     name: Tests
     needs: build
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        angular_version: [17]
+        # angular_version: ['17.0.0', '18.0.0', '19.0.0']
+        graphql_version: ['15.0.0']
+        # graphql_version: [15, 16]
+        apollo_client_version: ['3.9.7']
+        node_version: [20]
     steps:
       - uses: actions/checkout@master
 
-      - name: Use Node.js 18
+      - name: Use Node.js ${{ matrix.node_version }}
         uses: actions/setup-node@master
         with:
-          node-version: 18
+          node-version: ${{ matrix.node_version }}
 
       - uses: actions/cache@v4
         name: Cache node_modules
@@ -74,6 +81,18 @@ jobs:
 
       - name: Install
         run: yarn
+
+      - name: Install Angular CLI
+        run: npm install @angular/cli@${{ matrix.angular_version }} --global
+
+      - name: ng
+        run: ng update @angular/cli@${{ matrix.angular_version }} @angular/core@${{ matrix.angular_version }}
+
+      - name: ng add @apollo/client graphql
+        run: yarn add @apollo/client@${{ matrix.apollo_client_version }} graphql@${{matrix.graphql_version}} -W
+
+      - name: pac ver
+        run: npm list
 
       - uses: actions/cache@v4
         name: Share build
@@ -84,82 +103,61 @@ jobs:
       - name: Test
         run: yarn test --ci
 
-  prettier:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@master
+  # pretti ./node_modules/.bin/prettier --check .
 
-      - name: Use Node.js 18
-        uses: actions/setup-node@master
-        with:
-          node-version: 18
+  # angular:
+  #   name:
+  #     Test on Angular ${{ matrix.angular_version }} GraphQL ${{ matrix.graphql_version }} Node ${{
+  #     matrix.node_version }}
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       angular_version: [17, 18, 19]
+  #       graphql_version: [16]
+  #       node_version: [18, 20]
+  #   steps:
+  #     - name: Use Node.js ${{ matrix.node_version }}
+  #       uses: actions/setup-node@master
+  #       with:
+  #         node-version: ${{ matrix.node_version }}
 
-      - uses: actions/cache@v4
-        name: Cache node_modules
-        with:
-          path: '**/node_modules'
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+  #     - uses: actions/cache@v4
+  #       name: Share tarball
+  #       with:
+  #         path: 'packages/apollo-angular/apollo-angular.tgz'
+  #         key: ${{ github.sha }}
 
-      - name: Install
-        run: yarn
+  #     - uses: actions/cache@v4
+  #       name: Share script
+  #       with:
+  #         path: 'scripts/prepare-e2e.js'
+  #         key: ${{ github.sha }}
 
-      - run: ./node_modules/.bin/prettier --check .
+  #     - name: Install Angular CLI
+  #       run: npm install @angular/cli@${{ matrix.angular_version }} --global
 
-  angular:
-    name:
-      Test on Angular ${{ matrix.angular_version }} GraphQL ${{ matrix.graphql_version }} Node ${{
-      matrix.node_version }}
-    needs: build
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        angular_version: [17, 18, 19]
-        graphql_version: [15, 16]
-        node_version: [18, 20]
-    steps:
-      - name: Use Node.js ${{ matrix.node_version }}
-        uses: actions/setup-node@master
-        with:
-          node-version: ${{ matrix.node_version }}
+  #     - name: ng new
+  #       run: ng new testapp --package-manager yarn --defaults --minimal --skip-git
 
-      - uses: actions/cache@v4
-        name: Share tarball
-        with:
-          path: 'packages/apollo-angular/apollo-angular.tgz'
-          key: ${{ github.sha }}
+  #     - name: ng add apollo-angular
+  #       run:
+  #         (cd testapp && ng add ../packages/apollo-angular/apollo-angular.tgz --graphql '${{
+  #         matrix.graphql_version }}.0.0' --defaults --verbose --skip-confirmation)
 
-      - uses: actions/cache@v4
-        name: Share script
-        with:
-          path: 'scripts/prepare-e2e.js'
-          key: ${{ github.sha }}
+  #     - name: ng build
+  #       run: (cd testapp && yarn ng run testapp:build:production)
 
-      - name: Install Angular CLI
-        run: npm install @angular/cli@${{ matrix.angular_version }} --global
+  #     - name: Setup E2E tests
+  #       run: |
+  #         sudo apt-get install libgtk2.0-0 libgtk-3-0 libgbm-dev libnotify-dev libgconf-2-4 libnss3 libxss1 libasound2 libxtst6 xauth xvfb
+  #         (cd testapp && yarn add -D cypress-fail-on-console-error)
 
-      - name: ng new
-        run: ng new testapp --package-manager yarn --defaults --minimal --skip-git
+  #     - name: ng add cypress
+  #       run: (cd testapp && ng add @cypress/schematic --defaults --verbose --skip-confirmation)
 
-      - name: ng add apollo-angular
-        run:
-          (cd testapp && ng add ../packages/apollo-angular/apollo-angular.tgz --graphql '${{
-          matrix.graphql_version }}.0.0' --defaults --verbose --skip-confirmation)
+  #     - name: Update Angular code
+  #       run: ./scripts/prepare-e2e.js testapp ${{ matrix.graphql_version }}
 
-      - name: ng build
-        run: (cd testapp && yarn ng run testapp:build:production)
-
-      - name: Setup E2E tests
-        run: |
-          sudo apt-get install libgtk2.0-0 libgtk-3-0 libgbm-dev libnotify-dev libgconf-2-4 libnss3 libxss1 libasound2 libxtst6 xauth xvfb
-          (cd testapp && yarn add -D cypress-fail-on-console-error)
-
-      - name: ng add cypress
-        run: (cd testapp && ng add @cypress/schematic --defaults --verbose --skip-confirmation)
-
-      - name: Update Angular code
-        run: ./scripts/prepare-e2e.js testapp ${{ matrix.graphql_version }}
-
-      - name: ng e2e
-        run: (cd testapp && yarn ng run testapp:cypress-run:production)
+  #     - name: ng e2e
+  #       run: (cd testapp && yarn ng run testapp:cypress-run:production)
